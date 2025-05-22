@@ -1,13 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const sellerController = require('../controllers/sellerController');
-const authSeller = require('../middleware/authSeller');
+const { registerSeller,loginSeller ,updateSellerProfile,logoutseller} = require('../controllers/sellerController');
+const authAdmin = require('../middlewares/authAdmin');
 
-router.post('/register', sellerController.register);
-router.post('/login', sellerController.login);
-router.get('/profile', authSeller, sellerController.profile);
-router.put('/profile', authSeller, sellerController.update);
-router.post('/logout', authSeller, sellerController.logout);
-router.delete('/:id', authSeller, sellerController.deleteSeller);
+// Public route for seller registration
+router.post('/register', registerSeller);
+
+// ✅ Seller Login
+router.post('/login', loginSeller);
+
+
+
+// ✅ Seller updates their own profile
+router.put('/update-profile', authAdmin, updateSellerProfile);
+
+//logout
+router.post('/logout', authAdmin, logoutseller);
+
 
 module.exports = router;
