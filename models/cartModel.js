@@ -1,35 +1,44 @@
+// models/Cart.js
 const mongoose = require('mongoose');
 
 const cartItemSchema = new mongoose.Schema({
-  product: {
+  productId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product', // Make sure you have a Product model
-    required: true
+    ref: 'Product',
+    required: true,
+  },
+  name: {
+    type: String,
+    required: true,
+  },
+  price: {
+    type: Number,
+    required: true,
   },
   quantity: {
     type: Number,
     required: true,
-    min: 1,
-    default: 1
-  },
-  priceAtAddTime: {
-    type: Number,
-    required: true
-  }
-}, { _id: false });
-
-const cartSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User', // Assuming you have a User model
-    required: true,
-    unique: true // Each user has only one cart
-  },
-  items: [cartItemSchema],
-  updatedAt: {
-    type: Date,
-    default: Date.now
+    default: 1,
   }
 });
+
+const cartSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    unique: true, // one cart per user
+  },
+  cartItems: [cartItemSchema],
+}, { timestamps: true });
+
+// Virtual to calculate total price
+cartSchema.virtual('totalAmount').get(function () {
+  return this.cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+});
+
+// Ensure virtual fields are included when converting to JSON or Object
+cartSchema.set('toObject', { virtuals: true });
+cartSchema.set('toJSON', { virtuals: true });
 
 module.exports = mongoose.model('Cart', cartSchema);

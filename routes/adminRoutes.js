@@ -12,6 +12,8 @@ const {
 
 const authAdmin = require('../middlewares/authAdmin');
 const authorizeRoles = require('../middlewares/authorizeRoles');
+const { addProduct,updateProduct,deleteProductByAdmin } = require('../controllers/adminController');
+const upload = require('../middlewares/multer');
 
 // Login route (public)
 router.post('/login', login);
@@ -28,6 +30,25 @@ router
 
   // Super Admin approves seller
 router.put('/approve-seller/:sellerId', authAdmin, authorizeRoles('superadmin'), approveSeller);
+
+//add new Products
+
+router.post(
+  '/addproducts',
+  authAdmin,
+  authorizeRoles('superadmin'),
+  upload.single('image'), // ✅ multer middleware for image upload
+  addProduct
+);
+router.post(
+  '/updateproducts/:id',
+  authAdmin,
+  authorizeRoles('superadmin'),
+  upload.single('image'), // ✅ multer middleware for image upload
+  updateProduct
+);
+router.delete('/delete/:productId', authAdmin, authorizeRoles('superadmin'),deleteProductByAdmin);
+
 
 router.post('/logout', authAdmin, logoutAdmin);
 

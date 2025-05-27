@@ -3,40 +3,33 @@
 const User = require("../models/userModel");
 const bcrypt = require("bcrypt");
 const createToken=require('../utils/generateToken')
+const Cart = require("../models/cartModel");
+
 
 // Register Controller
 const register = async (req, res, next) => {
   try {
     const { name, email, password, profilePic } = req.body || {};
-    console.log(name, email, password);
 
-    // Validate input
     if (!name || !email || !password) {
       return res.status(400).json({ error: "All fields are mandatory" });
     }
 
-    // Check if user already exists
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ error: "User already exists" });
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    console.log(hashedPassword);
-
-    // Save user to DB
+    // Pass plain password; schema will hash it
     const newUser = new User({
       name,
       email,
-      password: hashedPassword,
+      password,
       profilePic,
     });
 
     const savedUser = await newUser.save();
 
-    // Remove password from returned data
     const userData = savedUser.toObject();
     delete userData.password;
 
@@ -47,49 +40,63 @@ const register = async (req, res, next) => {
   }
 };
 
-// Login Controller
-// Login Controller
+//login
 const login = async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
 
+    const trimmedEmail = email.trim();
+const trimmedPassword = password.trim();
+
     // Validate input
     if (!email || !password) {
+      console.log("🔴 Missing Fields:", { email, password });
       return res.status(400).json({ error: "All fields are mandatory" });
     }
 
+
     // Check if user exists
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: trimmedEmail });
     if (!user) {
+      
       return res.status(400).json({ error: "User not found" });
     }
 
     // Compare passwords
-    const isPasswordMatch = await bcrypt.compare(password, user.password);
+   const isPasswordMatch = await bcrypt.compare(trimmedPassword, user.password);
+
+  
+
     if (!isPasswordMatch) {
+      
       return res.status(400).json({ error: "Invalid password" });
     }
 
     // Token creation
-    const token = createToken(user._id, 'user');
+    const token = createToken(user._id, user.role || 'user');
+  
 
     // Set token in cookie
     res.cookie('token', token, {
       httpOnly: true,
       secure: false,
       sameSite: "strict"
-      
     });
 
     // Remove password from user object
     const userObject = user.toObject();
     delete userObject.password;
 
+    console.log("✅ Login Success:", userObject);
+
     return res.status(200).json({ message: "Login Successful", user: userObject });
+
   } catch (error) {
-    console.error(error);
+    console.error("🔥 Login Error:", error);
     res.status(error.status || 500).json({ error: error.message || "Internal server error" });
-  }};
+  }
+};
+
   // profile 
 
   const profile=async(req,res,next)=>{
@@ -121,25 +128,64 @@ const{name,email,password,profilePic}=req.body||{}
   }
   //delete
 
-  const deleteUser=async(req,res,next)=>{
-    try{
+  const deleteUser = async (req, res, next) => {
+  try {
+    const userId = req.user._id; // Get user ID from token (authenticated user)
 
-      const userId=req.params.userId
-      if(!userId){
-        return res.status(400).json({error:'Used Id is Required'})
-      }
-
-      const userData=await User.findByIdAndDelete(userId)
-      if(!userData){
-      return res.status(200).json({deletedUser:userData._Id,message:'User Deleted'})
-      }  
-      
-      return res.status(200).json({data:userData,message:"Profile Updated"})
-    }catch(error){
-      console.log(error)
-      res.status(error.status||500).json({error:error.message||"internal server error"})
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
     }
+
+    // Delete the user's cart
+    await Cart.deleteOne({ userId });
+
+    // Delete the user
+    const deletedUser = await User.findByIdAndDelete(userId);
+
+    if (!deletedUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Clear auth cookie if you're using one
+    res.clearCookie('token');
+
+    return res.status(200).json({
+      message: 'Your account and cart have been deleted successfully.',
+      deletedUser: {
+        id: deletedUser._id,
+        email: deletedUser.email,
+        role: deletedUser.role,
+      }
+    });
+  } catch (error) {
+    console.error("❌ Delete User Error:", error);
+    res.status(error.status || 500).json({ error: error.message || "Internal server error" });
   }
+};
+  // forget password
+ const resetUserPassword = async (req, res, next) => {
+  try {
+    const { email, newPassword, confirmPassword } = req.body;
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: "Passwords do not match" });
+    }
+
+    const user = await User.findOne({ email, role: "user" });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Assign plain password and save to trigger pre-save hook hashing
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({ message: "Password updated successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 
  //log out
 
@@ -154,4 +200,4 @@ const{name,email,password,profilePic}=req.body||{}
 
 
 
-module.exports = { register, login,profile,logout,update,deleteUser };
+module.exports = { register, login,profile,logout,update,deleteUser,resetUserPassword };

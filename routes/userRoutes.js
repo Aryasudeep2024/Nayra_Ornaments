@@ -2,7 +2,8 @@ const express=require('express')
 const userRoutes= express.Router()
 const { register, login,profile,logout,update,deleteUser } = require("../controllers/userController");
 const authUser=require('../middlewares/authUser')
-const authAdmin=require('../middlewares/authAdmin')
+const { resetUserPassword } = require('../controllers/userController');
+
 //signup
   
 userRoutes.post('/register',register)
@@ -21,7 +22,11 @@ userRoutes.get('/profile',authUser,profile)
 userRoutes.patch('/update',authUser,update)
  
 //delete
-userRoutes.delete('/delete/:userId',authAdmin,deleteUser)
+userRoutes.delete('/delete',authUser,deleteUser)
+
+//forget password
+
+userRoutes.post('/reset-password', resetUserPassword);
 
 
 module.exports=userRoutes

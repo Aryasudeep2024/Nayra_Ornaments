@@ -1,73 +1,48 @@
 const mongoose = require('mongoose');
 
-const orderItemSchema = new mongoose.Schema({
-  product: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product',
-    required: true
+const productSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, 'Product name is required'],
+    trim: true,
   },
-  quantity: {
-    type: Number,
-    required: true,
-    min: 1
+
+  description: {
+    type: String,
+    required: [true, 'Product description is required'],
   },
+
+  image: {
+    type: String, // Cloudinary URL
+    required: [true, 'Product image URL is required'],
+  },
+
   price: {
     type: Number,
-    required: true
-  }
-}, { _id: false });
+    required: [true, 'Product price is required'],
+    min: [0, 'Price cannot be negative'],
+  },
+   quantity: {
+  type: Number,
+  required: [true, 'Quantity is required'],
+  min: [0, 'Quantity cannot be negative'],
+  default: 1,
+},
 
-const orderSchema = new mongoose.Schema({
-  user: {
+
+  addedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User', // or 'Customer' if you separate
-    required: true
-  },
-  items: [orderItemSchema],
-
-  shippingAddress: {
-    fullName: { type: String, required: true },
-    addressLine1: { type: String, required: true },
-    addressLine2: { type: String },
-    city: { type: String, required: true },
-    state: { type: String },
-    postalCode: { type: String, required: true },
-    country: { type: String, required: true },
-    phone: { type: String }
+    ref: 'User', // or 'Seller' depending on your model
+    required: true,
   },
 
-  paymentMethod: {
+  role: {
     type: String,
-    enum: ['COD', 'Credit Card', 'PayPal', 'UPI'],
-    required: true
-  },
-
-  paymentStatus: {
-    type: String,
-    enum: ['pending', 'paid', 'failed'],
-    default: 'pending'
-  },
-
-  orderStatus: {
-    type: String,
-    enum: ['processing', 'shipped', 'delivered', 'cancelled'],
-    default: 'processing'
-  },
-
-  totalAmount: {
-    type: Number,
-    required: true
-  },
-
-  isVerified: {
-    type: Boolean,
-    default: false
-  },
-
-  orderedAt: {
-    type: Date,
-    default: Date.now
+    enum: ['seller', 'superadmin'],
+    required: true,
   }
+}, {
+  timestamps: true,
 });
 
-module.exports = mongoose.model('Order', orderSchema);
+module.exports = mongoose.model('Product', productSchema);

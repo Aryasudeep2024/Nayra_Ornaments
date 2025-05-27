@@ -1,6 +1,9 @@
 const User = require('../models/userModel');
+const  cloudinary = require('../config/cloudinary');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const Product = require('../models/productModel');
+const Cart = require('../models/cartModel');
 
 const registerSeller = async (req, res) => {
   try {
@@ -96,12 +99,56 @@ const loginSeller = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("🔥 Error in loginSeller:", error);
+   
     res.status(500).json({ message: error.message || 'Server error' });
   }
 };
 
-module.exports = loginSeller;
+//seller delete their account and their products
+
+
+
+const deleteSellerAccount = async (req, res) => {
+  try {
+    const sellerId = req.user.id || req.user._id;
+    const role = req.user.role;
+
+    if (role !== 'seller') {
+      return res.status(403).json({ message: 'Only sellers can delete their accounts' });
+    }
+
+    // 1️⃣ Get all product IDs added by the seller
+    const sellerProducts = await Product.find({ addedBy: sellerId }).select('_id');
+    const productIds = sellerProducts.map(p => p._id);
+
+    // 2️⃣ Delete all products added by seller
+    await Product.deleteMany({ addedBy: sellerId });
+
+    // 3️⃣ Remove seller's products from ALL user carts
+    if (productIds.length > 0) {
+      await Cart.updateMany(
+        {},
+        { $pull: { cartItems: { productId: { $in: productIds } } } }
+      );
+    }
+
+    // 4️⃣ Delete seller's own cart (if exists)
+    await Cart.deleteOne({ userId: sellerId });
+
+    // 5️⃣ Delete seller's user account
+    await User.findByIdAndDelete(sellerId);
+
+    // 6️⃣ Clear cookie
+    res.clearCookie('token');
+
+    res.status(200).json({ message: 'Seller account, products, and related cart items deleted successfully' });
+
+  } catch (error) {
+    console.error('Error deleting seller account:', error);
+    res.status(500).json({ message: 'Server error while deleting account' });
+  }
+};
+
 
 
 
@@ -133,6 +180,160 @@ const updateSellerProfile = async (req, res) => {
   }
 };
 
+//password forget and reset password
+
+const resetSellerPassword = async (req, res) => {
+  try {
+    const { email, mobileNumber, newPassword, confirmPassword } = req.body;
+
+
+    if (newPassword !== confirmPassword) {
+      console.log("Passwords do not match");
+      return res.status(400).json({ message: "Passwords do not match" });
+    }
+
+
+    const seller = await User.findOne({
+      email,
+      contactNumber: String(mobileNumber),
+      role: "seller"
+    });
+
+    if (!seller) {
+      console.log("Seller not found or mobile number mismatch");
+      return res.status(404).json({ message: "Seller not found or invalid mobile number" });
+    }
+
+    // Assign plain newPassword and save to trigger pre-save hook hashing
+    seller.password = newPassword;
+    await seller.save();
+
+  
+    res.status(200).json({ message: "Password updated successfully" });
+
+  } catch (error) {
+  
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+//Add products
+
+const addProduct = async (req, res, next) => {
+  try {
+    const { title, description, price,quantity } = req.body;
+
+    if (!title || !description || !price ||!quantity) {
+      return res.status(400).json({ message: 'Required fields are missing' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'Product image is required' });
+    }
+
+    const result = await cloudinary.uploader.upload(req.file.path);
+
+    const addedBy = req.user.id || req.user._id;
+    const role = req.user.role;
+
+    const product = new Product({
+      name: title,                         // match schema field
+      description,
+      price,
+      quantity,
+      image: result.secure_url,            // match schema field
+      role,                                // required in schema
+      addedBy                              // required in schema
+    });
+
+    await product.save();
+
+    res.status(201).json({
+      message: 'Product added successfully',
+      product,
+    });
+
+  } catch (error) {
+    console.error('Add Product Error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+//Update products by seller
+const updateProductStockAndPrice = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { price, quantity } = req.body;
+
+    // Ensure at least one field is provided
+    if (price === undefined && quantity === undefined) {
+      return res.status(400).json({ message: 'At least price or quantity must be provided for update' });
+    }
+
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const isSeller = req.user.role === 'seller';
+  
+
+    // Only allow seller (of that product) or superadmin to update
+    if (isSeller && product.addedBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Not authorized to update this product' });
+    }
+
+    // Update fields only if they’re present
+    if (price !== undefined) product.price = price;
+    if (quantity !== undefined) product.quantity = quantity;
+
+    await product.save();
+
+    res.status(200).json({
+      message: 'Product updated successfully',
+      product
+    });
+
+  } catch (error) {
+    console.error('Update Product Error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Delete Product
+
+
+const deleteProductBySeller = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const userId = req.user.id || req.user._id;
+    const userRole = req.user.role;
+
+    const product = await Product.findById(productId);
+
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const isSeller = userRole === 'seller';
+    const isSuperAdmin = userRole === 'superadmin';
+
+    // Authorization check
+    if (isSeller && product.addedBy.toString() !== userId.toString()) {
+      return res.status(403).json({ message: 'Not authorized to delete this product' });
+    }
+
+    await Product.findByIdAndDelete(productId);
+
+    res.status(200).json({ message: 'Product deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete Product Error:', error);
+    res.status(500).json({ message: 'Server error while deleting product' });
+  }
+};
+
 
 // Log out seller
 const logoutseller = async (req, res, next) => {
@@ -146,4 +347,4 @@ const logoutseller = async (req, res, next) => {
 
 
 
-module.exports = { registerSeller,loginSeller,updateSellerProfile,logoutseller };
+module.exports = { registerSeller,loginSeller,updateSellerProfile,addProduct,logoutseller,resetSellerPassword,deleteSellerAccount,deleteProductBySeller,updateProductStockAndPrice   };

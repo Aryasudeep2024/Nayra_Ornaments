@@ -1,12 +1,12 @@
 const mongoose = require('mongoose');
 
 const reviewSchema = new mongoose.Schema({
-  product: {
+  productId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
     required: true
   },
-  user: {
+  userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
@@ -22,10 +22,7 @@ const reviewSchema = new mongoose.Schema({
     trim: true,
     maxlength: 1000
   },
-  isVerifiedPurchase: {
-    type: Boolean,
-    default: false
-  },
+  
   createdAt: {
     type: Date,
     default: Date.now

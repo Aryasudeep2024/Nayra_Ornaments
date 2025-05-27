@@ -1,9 +1,14 @@
-// test-bcrypt.js
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
-const hashFromDB = "$2b$10$SJUNLF89TBbAfZVBp9wOue7iOWMiPVmapU/tGJndE/W3zHgBRVFyC";
-const inputPassword = "admin123";
+async function test() {
+  const password = 'arya@2025';
+  const salt = await bcrypt.genSalt(10);
+  const hash = await bcrypt.hash(password, salt);
 
-bcrypt.compare(inputPassword, hashFromDB)
-  .then(result => console.log("Password match:", result))
-  .catch(err => console.error("Error:", err));
+  console.log('Hash:', hash);
+
+  const match = await bcrypt.compare(password, hash);
+  console.log('Password match:', match);
+}
+
+test();

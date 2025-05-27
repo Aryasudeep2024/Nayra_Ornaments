@@ -1,38 +1,39 @@
-const jwt=require('jsonwebtoken')
+const jwt = require('jsonwebtoken');
 
-const authSeller=(req,res,next)=>
-{
-    try{
+const authSeller = (req, res, next) => {
+  try {
+    // 1. Get token from cookies
+    const { token } = req.cookies;
 
- //collect token from coockies
-const {token}=req.cookies
-
-//no token - unauthorized user
-
-if(!token){
-    return res.status(401).json({message:"User not authorized"})
-}
-
-//token decode
-const decodedToken=jwt.verify(token,process.env.JWT_SECRET_KEY)
-
- //issues  with token  
- if(!decodedToken){
-    return res.status(401).json({message:"Invalid Token"})
- }
-//check the role-Admin
-if(decodedToken.role!='admin' && decodedToken.role!='seller'){
-    return res.status(401).json({message:"User Not Authorized"})
-}
-
- //attach token to req
-req.user=decodedToken 
- //next
- next()
-
-
-    }catch(error){
-
+    // 2. If token not found
+    if (!token) {
+      return res.status(401).json({ message: 'User not authorized. Token missing.' });
     }
+
+    // 3. Verify token
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
+
+    // 4. Invalid token check (optional, already throws if invalid)
+    if (!decodedToken) {
+      return res.status(401).json({ message: 'Invalid token.' });
+    }
+
+    // 5. Check role
+    if (decodedToken.role !== 'superadmin' && decodedToken.role !== 'seller') {
+      return res.status(403).json({ message: 'Access denied. Not a seller or admin.' });
+    }
+
+    // 6. Attach user to request
+    req.user = decodedToken;
+
+    // 7. Pass to next middleware
+    next();
+
+  } catch (error) {
+  console.error('Auth Middleware Error:', error);
+  return res.status(500).json({ message: 'Internal server error' });
 }
+
+};
+
 module.exports = authSeller;

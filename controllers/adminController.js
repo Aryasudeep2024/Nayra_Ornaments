@@ -1,7 +1,10 @@
 const User = require("../models/userModel");
+const Product = require('../models/productModel');
 const bcrypt = require("bcrypt");
+const  cloudinary = require('../config/cloudinary');
 const createToken = require("../utils/generateToken");
 const { ClientSession } = require("mongodb");
+const Cart = require('../models/cartModel');
 
 // Register New Admin (Only by Superadmin)
 const register = async (req, res) => {
@@ -139,23 +142,52 @@ const updateUserById = async (req, res) => {
     res.status(500).json({ error: error.message || "Internal server error" });
   }
 };
+// delete user/ seller by admin
 
-// Delete any user by ID (Super Admin only)
 const deleteUserById = async (req, res) => {
   try {
     const userId = req.params.id;
 
-    const deletedUser = await User.findByIdAndDelete(userId);
-
-    if (!deletedUser) {
+    // 1️⃣ Find the user first
+    const user = await User.findById(userId);
+    if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    res.status(200).json({ message: "User deleted successfully" });
+    const role = user.role;
+
+    // 2️⃣ If user is a seller, clean up their products and cart references
+    if (role === 'seller') {
+      // Get all products added by this seller
+      const sellerProducts = await Product.find({ addedBy: userId }).select('_id');
+      const productIds = sellerProducts.map(p => p._id);
+
+      // Delete all products added by this seller
+      await Product.deleteMany({ addedBy: userId });
+
+      // Remove those products from all user carts
+      if (productIds.length > 0) {
+        await Cart.updateMany(
+          {},
+          { $pull: { cartItems: { productId: { $in: productIds } } } }
+        );
+      }
+    }
+
+    // 3️⃣ Delete the user's cart
+    await Cart.deleteOne({ userId });
+
+    // 4️⃣ Delete the user
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({ message: "User and related cart/Products also deleted successfully" });
+
   } catch (error) {
+    console.error('Error in deleteUserById:', error);
     res.status(500).json({ error: error.message || "Internal server error" });
   }
 };
+
 
 
 // ✅ Super Admin approves a seller
@@ -186,6 +218,117 @@ const approveSeller = async (req, res) => {
   }
 };
 
+//add products by admin
+
+const addProduct = async (req, res, next) => {
+  try {
+    const { title, description, price,quantity } = req.body;
+
+    if (!title || !description || !price ||!quantity) {
+      return res.status(400).json({ message: 'Required fields are missing' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'Product image is required' });
+    }
+
+    const result = await cloudinary.uploader.upload(req.file.path);
+
+    const addedBy = req.user.id || req.user._id;
+    const role = req.user.role;
+
+    const product = new Product({
+      name: title,                         // match schema field
+      description,
+      price,
+      quantity,
+      image: result.secure_url,            // match schema field
+      role,                                // required in schema
+      addedBy                              // required in schema
+    });
+
+    await product.save();
+
+    res.status(201).json({
+      message: 'Product added successfully',
+      product,
+    });
+
+  } catch (error) {
+    console.error('Add Product Error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+//Update Products and quantity
+
+const updateProduct = async (req, res) => {
+  try {
+    const { id } = req.params; // Extract product ID from the URL
+
+    const existingProduct = await Product.findById(id);
+    if (!existingProduct) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const { title, description, price, quantity } = req.body;
+
+    // Optional: handle new image upload
+    if (req.file) {
+      const result = await cloudinary.uploader.upload(req.file.path);
+      existingProduct.imageUrl = result.secure_url;
+    }
+
+    // Update other fields
+    if (title) existingProduct.title = title;
+    if (description) existingProduct.description = description;
+    if (price) existingProduct.price = price;
+    if (quantity !== undefined) existingProduct.quantity = quantity;
+
+    // Check quantity status
+    if (existingProduct.quantity < 1) {
+      console.log('⚠️ Product is out of stock');
+    }
+
+    await existingProduct.save();
+
+    res.status(200).json({ message: 'Product updated successfully', product: existingProduct });
+  } catch (error) {
+    console.error('Update Product Error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+// delete Products
+
+const deleteProductByAdmin = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const userId = req.user.id || req.user._id;
+    const userRole = req.user.role;
+
+    const product = await Product.findById(productId);
+
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const isSuperAdmin = userRole === 'superadmin';
+
+    // Authorization check
+    if (!isSuperAdmin ) {
+      return res.status(403).json({ message: 'Not authorized to delete this product' });
+    }
+
+    await Product.findByIdAndDelete(productId);
+
+    res.status(200).json({ message: 'Product deleted successfully' });
+
+  } catch (error) {
+    console.error('Delete Product Error:', error);
+    res.status(500).json({ message: 'Server error while deleting product' });
+  }
+};
+
 
 
 
@@ -199,4 +342,4 @@ const logoutAdmin = async (req, res, next) => {
   res.status(200).json({ message: "Logged out successfully" });
 };
 
-module.exports = { register, login, getUserProfileById, updateUserById, deleteUserById, approveSeller,logoutAdmin };
+module.exports = { register, login, getUserProfileById, updateUserById, deleteUserById,addProduct,updateProduct,deleteProductByAdmin, approveSeller,logoutAdmin };
