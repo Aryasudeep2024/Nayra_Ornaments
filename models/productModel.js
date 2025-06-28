@@ -12,6 +12,12 @@ const productSchema = new mongoose.Schema({
     required: [true, 'Product description is required'],
   },
 
+  category: {
+  type: String,
+  required: [true, 'Product category is required'],
+  enum: ['Ring', 'Necklace', 'Bangles', 'Pendant'],
+},
+
   image: {
     type: String, // Cloudinary URL
     required: [true, 'Product image URL is required'],

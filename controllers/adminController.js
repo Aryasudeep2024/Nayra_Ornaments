@@ -6,13 +6,22 @@ const createToken = require("../utils/generateToken");
 const { ClientSession } = require("mongodb");
 const Cart = require('../models/cartModel');
 
-// Register New Admin (Only by Superadmin)
+// ✅ Register New Seller (Only by Superadmin)
 const register = async (req, res) => {
   try {
-    const { name, email, password, profilePic, role } = req.body;
+    const {
+      name,
+      email,
+      password,
+      profilePic,
+      role,
+      isApproved,
+      shopName,
+      contactNumber
+    } = req.body;
 
     if (!name || !email || !password || !role) {
-      return res.status(400).json({ error: "All fields are required" });
+      return res.status(400).json({ error: "All required fields are missing" });
     }
 
     const existingUser = await User.findOne({ email });
@@ -20,22 +29,27 @@ const register = async (req, res) => {
       return res.status(400).json({ error: "Email already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newAdmin = new User({
+    // Create user document — password is auto-hashed in pre-save middleware
+    const newUser = new User({
       name,
       email,
-      password: hashedPassword,
+      password,
       profilePic,
-      role, // "admin" or "superadmin"
+      role,
+      isApproved: role === "seller" ? isApproved : false,
+      shopName: role === "seller" ? shopName : undefined,
+      contactNumber: role === "seller" ? contactNumber : undefined,
       isSuperAdmin: role === "superadmin"
     });
 
-    const savedAdmin = await newAdmin.save();
-    const adminData = savedAdmin.toObject();
-    delete adminData.password;
+    const savedUser = await newUser.save();
+    const cleanUser = savedUser.toObject();
+    delete cleanUser.password;
 
-    res.status(201).json({ message: "Seller account created", admin: adminData });
+    res.status(201).json({
+      message: "Seller account created successfully",
+      user: cleanUser
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message || "Internal server error" });
@@ -188,6 +202,17 @@ const deleteUserById = async (req, res) => {
   }
 };
 
+//pending approval lists
+
+const getPendingSellers = async (req, res) => {
+  try {
+    const pending = await User.find({ role: 'seller', isApproved: false }).select('-password');
+    res.status(200).json(pending);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching pending sellers' });
+  }
+};
+
 
 
 // ✅ Super Admin approves a seller
@@ -222,15 +247,17 @@ const approveSeller = async (req, res) => {
 
 const addProduct = async (req, res, next) => {
   try {
-    const { title, description, price,quantity } = req.body;
-
-    if (!title || !description || !price ||!quantity) {
+    console.log("Body:", req.body);
+    const { title, description, price,quantity,category  } = req.body;
+     
+    if (!title || !description || !price ||!quantity||!category) {
       return res.status(400).json({ message: 'Required fields are missing' });
     }
 
     if (!req.file) {
       return res.status(400).json({ message: 'Product image is required' });
     }
+console.log("File received:", req.file);
 
     const result = await cloudinary.uploader.upload(req.file.path);
 
@@ -240,6 +267,7 @@ const addProduct = async (req, res, next) => {
     const product = new Product({
       name: title,                         // match schema field
       description,
+      category,
       price,
       quantity,
       image: result.secure_url,            // match schema field
@@ -258,7 +286,21 @@ const addProduct = async (req, res, next) => {
     console.error('Add Product Error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
+};//product view by ID
+
+const getProductById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await Product.findById(id);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+
+    res.status(200).json({ product });
+  } catch (error) {
+    console.error("Get Product Error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
 };
+
 
 //Update Products and quantity
 
@@ -342,4 +384,4 @@ const logoutAdmin = async (req, res, next) => {
   res.status(200).json({ message: "Logged out successfully" });
 };
 
-module.exports = { register, login, getUserProfileById, updateUserById, deleteUserById,addProduct,updateProduct,deleteProductByAdmin, approveSeller,logoutAdmin };
+module.exports = { register, login, getUserProfileById, updateUserById,getPendingSellers,deleteUserById,addProduct,getProductById,updateProduct,deleteProductByAdmin, approveSeller,logoutAdmin };

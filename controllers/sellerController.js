@@ -34,27 +34,38 @@ const registerSeller = async (req, res) => {
     res.status(500).json({ message: error.message || 'Server Error' });
   }
 };
+// profile view
+
+const getSellerProfile = async (req, res) => {
+  try {
+    const sellerId = req.user.id; // comes from authSeller middleware
+    const seller = await User.findById(sellerId).select('-password');
+
+    if (!seller || seller.role !== 'seller') {
+      return res.status(403).json({ message: 'Access denied. Not a seller.' });
+    }
+
+    res.status(200).json(seller);
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
 // login seller
 
 const loginSeller = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     // Check if seller exists
     const seller = await User.findOne({ email });
-    
+
     if (!seller) {
-      
       return res.status(400).json({ message: 'Invalid email or password' });
     }
 
     if (seller.role !== 'seller') {
-      
       return res.status(403).json({ message: 'Access denied. Not a seller account.' });
-    }
-
-    if (!seller.isApproved) {
-      
-      return res.status(403).json({ message: 'Seller not approved by Super Admin yet' });
     }
 
     // Compare password
@@ -74,8 +85,6 @@ const loginSeller = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-   
-
     // Set token in cookie
     res.cookie('token', token, {
       httpOnly: true,
@@ -84,7 +93,25 @@ const loginSeller = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // Send response
+    // ⏳ Check approval status
+    if (!seller.isApproved) {
+      return res.status(200).json({
+        message: 'Login successful, but seller not approved yet',
+        pendingApproval: true,
+        seller: {
+          id: seller._id,
+          name: seller.name,
+          email: seller.email,
+          shopName: seller.shopName,
+          contactNumber: seller.contactNumber,
+          profilePic: seller.profilePic,
+          role: seller.role,
+          isApproved: false
+        }
+      });
+    }
+
+    // ✅ Send successful login response
     res.status(200).json({
       message: 'Login successful',
       seller: {
@@ -95,14 +122,16 @@ const loginSeller = async (req, res) => {
         contactNumber: seller.contactNumber,
         profilePic: seller.profilePic,
         role: seller.role,
+        isApproved: true
       },
     });
 
   } catch (error) {
-   
     res.status(500).json({ message: error.message || 'Server error' });
   }
 };
+
+
 
 //seller delete their account and their products
 
@@ -174,7 +203,7 @@ const updateSellerProfile = async (req, res) => {
 
     await seller.save();
 
-    res.status(200).json({ message: 'Seller profile updated', data: seller });
+    res.status(200).json({ message: ' profile updated Successfully..', data: seller });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });
   }
@@ -222,11 +251,11 @@ const resetSellerPassword = async (req, res) => {
 
 const addProduct = async (req, res, next) => {
   try {
-    const { title, description, price,quantity } = req.body;
+    const { title, description, price,quantity,category } = req.body;
 
-    if (!title || !description || !price ||!quantity) {
-      return res.status(400).json({ message: 'Required fields are missing' });
-    }
+    if (!title || !description || !price || !quantity || !category || !req.file) {
+  return res.status(400).json({ message: 'All fields are required including image and category' });
+}
 
     if (!req.file) {
       return res.status(400).json({ message: 'Product image is required' });
@@ -240,6 +269,7 @@ const addProduct = async (req, res, next) => {
     const product = new Product({
       name: title,                         // match schema field
       description,
+      category,
       price,
       quantity,
       image: result.secure_url,            // match schema field
@@ -259,6 +289,49 @@ const addProduct = async (req, res, next) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+const getMyProducts = async (req, res) => {
+  try {
+    console.log('🔍 Incoming request to GET /seller/my');
+
+    // Log all cookies
+    console.log('🍪 Cookies Received:', req.cookies);
+
+    // Log the entire req.user object (decoded JWT)
+    console.log('👤 Decoded user object from JWT:', req.user);
+
+    // Extract seller ID from JWT payload
+    const sellerId = req.user?._id || req.user?.id;
+    console.log('🆔 Fetched Seller ID:', sellerId);
+
+    // If sellerId is missing, log a warning
+    if (!sellerId) {
+      console.warn('⚠️ Seller ID is missing from JWT. Unauthorized request.');
+      return res.status(401).json({ message: 'Invalid seller credentials.' });
+    }
+
+    // Fetch products from DB
+    console.log('📦 Attempting to fetch products from DB for seller:', sellerId);
+    const products = await Product.find({ addedBy: sellerId }).sort({ createdAt: -1 });
+
+    // Log the count of products found
+    console.log(`✅ ${products.length} product(s) found for this seller.`);
+
+    // Optional: Log one example product (if any)
+    if (products.length > 0) {
+      console.log('🔹 Sample product:', products[0]);
+    }
+
+    // Send response
+    res.status(200).json({ products });
+
+  } catch (err) {
+    console.error('❌ Error fetching seller products:', err);
+    res.status(500).json({ message: 'Server error while fetching products' });
+  }
+};
+
+
 
 //Update products by seller
 const updateProductStockAndPrice = async (req, res) => {
@@ -347,4 +420,4 @@ const logoutseller = async (req, res, next) => {
 
 
 
-module.exports = { registerSeller,loginSeller,updateSellerProfile,addProduct,logoutseller,resetSellerPassword,deleteSellerAccount,deleteProductBySeller,updateProductStockAndPrice   };
+module.exports = { registerSeller,loginSeller,getSellerProfile,getMyProducts ,updateSellerProfile,addProduct,logoutseller,resetSellerPassword,deleteSellerAccount,deleteProductBySeller,updateProductStockAndPrice   };

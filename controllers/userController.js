@@ -41,49 +41,52 @@ const register = async (req, res, next) => {
 };
 
 //login
+
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body || {};
+    let { email, password } = req.body || {};
 
-    const trimmedEmail = email.trim();
-const trimmedPassword = password.trim();
+    // Trim inputs
+    const trimmedEmail = email?.trim();
+    const trimmedPassword = password?.trim();
+    console.log("🔐 Password being sent:", JSON.stringify(trimmedPassword));
+
+    console.log("📩 Email being sent:", `"${trimmedEmail}"`);
+    console.log("🔐 Password being sent:", `"${trimmedPassword}"`);
 
     // Validate input
-    if (!email || !password) {
-      console.log("🔴 Missing Fields:", { email, password });
+    if (!trimmedEmail || !trimmedPassword) {
       return res.status(400).json({ error: "All fields are mandatory" });
     }
-
 
     // Check if user exists
     const user = await User.findOne({ email: trimmedEmail });
     if (!user) {
-      
+      console.log("❌ User not found for:", trimmedEmail);
       return res.status(400).json({ error: "User not found" });
     }
 
+    console.log("🔍 Found user:", user.email, "Role:", user.role);
+
     // Compare passwords
-   const isPasswordMatch = await bcrypt.compare(trimmedPassword, user.password);
-
-  
-
+    const isPasswordMatch = await bcrypt.compare(trimmedPassword, user.password);
+    
     if (!isPasswordMatch) {
-      
+      console.log("❌ Password mismatch for:", trimmedEmail);
       return res.status(400).json({ error: "Invalid password" });
     }
 
-    // Token creation
-    const token = createToken(user._id, user.role || 'user');
-  
+    // Create token
+    const token = createToken(user._id, user.role);
 
     // Set token in cookie
     res.cookie('token', token, {
       httpOnly: true,
-      secure: false,
+      secure: false, // Use `true` in production (HTTPS)
       sameSite: "strict"
     });
 
-    // Remove password from user object
+    // Exclude password from response
     const userObject = user.toObject();
     delete userObject.password;
 
@@ -93,7 +96,7 @@ const trimmedPassword = password.trim();
 
   } catch (error) {
     console.error("🔥 Login Error:", error);
-    res.status(error.status || 500).json({ error: error.message || "Internal server error" });
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
@@ -102,7 +105,7 @@ const trimmedPassword = password.trim();
   const profile=async(req,res,next)=>{
     try{
 
-      const userId=req.user.id
+      const userId=req.user._id
 
       const userData=await User.findById(userId).select("-password")
       return res.status(200).json({data:userData,message:"Profile retrieved"})
@@ -116,7 +119,8 @@ const trimmedPassword = password.trim();
    const update=async(req,res,next)=>{
     try{
 
-      const userId=req.user.id
+      const userId=req.user._id
+      console.log("userid:",userId)
 const{name,email,password,profilePic}=req.body||{}
       const userData=await User.findByIdAndUpdate(userId,{name,email,password,profilePic},{new:true})
       .select("-password")
@@ -163,7 +167,7 @@ const{name,email,password,profilePic}=req.body||{}
   }
 };
   // forget password
- const resetUserPassword = async (req, res, next) => {
+const resetUserPassword = async (req, res, next) => {
   try {
     const { email, newPassword, confirmPassword } = req.body;
 
@@ -172,19 +176,30 @@ const{name,email,password,profilePic}=req.body||{}
     }
 
     const user = await User.findOne({ email, role: "user" });
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Assign plain password and save to trigger pre-save hook hashing
+    console.log("👉 Setting new password...");
     user.password = newPassword;
-    await user.save();
 
-    res.status(200).json({ message: "Password updated successfully" });
+    console.log("👉 Saving user...");
+    try {
+      await user.save();
+      console.log("✅ Saved user successfully");
+      return res.status(200).json({ message: "Password updated successfully" });
+    } catch (saveError) {
+      console.error("❌ Error during user.save():", saveError);
+      return res.status(500).json({ message: "Server error", error: saveError.message });
+    }
+
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Outer try-catch error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 
  //log out

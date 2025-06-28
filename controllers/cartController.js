@@ -68,8 +68,14 @@ const getCartItems = async (req, res) => {
     const cart = await Cart.findOne({ userId }).populate('cartItems.productId', 'name image price');
 
     if (!cart) {
-      return res.status(404).json({ message: 'Cart is empty' });
-    }
+  return res.status(200).json({
+    cart: { cartItems: [] },
+    totalAmount: 0
+  });
+}
+console.log("Fetching cart for user:", userId);
+console.log("Cart found:", cart);
+
 
     const cartWithVirtuals = cart.toObject();
 

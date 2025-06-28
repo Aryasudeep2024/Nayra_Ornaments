@@ -1,55 +1,93 @@
 const express = require('express');
 const router = express.Router();
+
 const {
   register,
   login,
+  logoutAdmin,
   getUserProfileById,
   updateUserById,
   deleteUserById,
-  logoutAdmin,
-  approveSeller
+  approveSeller,
+  addProduct,
+  updateProduct,
+  getProductById,
+  getPendingSellers,
+  deleteProductByAdmin
 } = require('../controllers/adminController');
 
 const authAdmin = require('../middlewares/authAdmin');
 const authorizeRoles = require('../middlewares/authorizeRoles');
-const { addProduct,updateProduct,deleteProductByAdmin } = require('../controllers/adminController');
 const upload = require('../middlewares/multer');
 
-// Login route (public)
+
+// 🔓 Public Route - Admin Login
 router.post('/login', login);
 
-// Register new admin (Super Admin only)
-router.post('/register', authAdmin, authorizeRoles('superadmin'), register);
+// 🔐 Register new seller 
+router.post(
+  '/register',
+  authAdmin,
+  authorizeRoles('superadmin'),
+  register
+);
 
-// ✅ Unified route: Get, Update, Delete user by ID (Super Admin only)
-router
-  .route('/user/:id')
+// 👤 Get / Update / Delete a user by ID (Only for Super Admin)
+router.route('/user/:id')
   .get(authAdmin, authorizeRoles('superadmin'), getUserProfileById)
   .put(authAdmin, authorizeRoles('superadmin'), updateUserById)
   .delete(authAdmin, authorizeRoles('superadmin'), deleteUserById);
 
-  // Super Admin approves seller
-router.put('/approve-seller/:sellerId', authAdmin, authorizeRoles('superadmin'), approveSeller);
+  router.get(
+  '/pending-sellers',
+  authAdmin,
+  authorizeRoles('superadmin'),
+  getPendingSellers
+);
+// ✅ Approve a Seller (Super Admin)
+router.put(
+  '/approve-seller/:sellerId',
+  authAdmin,
+  authorizeRoles('superadmin'),
+  approveSeller
+);
 
-//add new Products
-
+// 🛒 Add Product (Super Admin only)
 router.post(
   '/addproducts',
   authAdmin,
   authorizeRoles('superadmin'),
-  upload.single('image'), // ✅ multer middleware for image upload
+  upload.single('image'),
   addProduct
 );
+//get the product
+router.get(
+  '/product/:id',
+  authAdmin,
+  authorizeRoles('superadmin'),
+  getProductById
+);
+
+
+// ✏️ Update Product by ID (Super Admin only)
 router.post(
   '/updateproducts/:id',
   authAdmin,
   authorizeRoles('superadmin'),
-  upload.single('image'), // ✅ multer middleware for image upload
+  upload.single('image'),
   updateProduct
 );
-router.delete('/delete/:productId', authAdmin, authorizeRoles('superadmin'),deleteProductByAdmin);
 
+// ❌ Delete Product by ID (Super Admin only)
+router.delete(
+  '/delete/:productId',
+  authAdmin,
+  authorizeRoles('superadmin'),
+  deleteProductByAdmin
+);
 
+// 🚪 Logout Admin
 router.post('/logout', authAdmin, logoutAdmin);
+
 
 module.exports = router;

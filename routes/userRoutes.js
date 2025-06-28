@@ -19,7 +19,7 @@ userRoutes.get('/logout',logout)
 userRoutes.get('/profile',authUser,profile)
 
 //update
-userRoutes.patch('/update',authUser,update)
+userRoutes.put('/update',authUser,update)
  
 //delete
 userRoutes.delete('/delete',authUser,deleteUser)

@@ -4,6 +4,7 @@ const authSeller = (req, res, next) => {
   try {
     // 1. Get token from cookies
     const { token } = req.cookies;
+console.log('🍪 [Middleware] Token from cookie:', token);
 
     // 2. If token not found
     if (!token) {
@@ -12,6 +13,8 @@ const authSeller = (req, res, next) => {
 
     // 3. Verify token
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
+    console.log('✅ [Middleware] Decoded JWT payload:', decodedToken);
+
 
     // 4. Invalid token check (optional, already throws if invalid)
     if (!decodedToken) {

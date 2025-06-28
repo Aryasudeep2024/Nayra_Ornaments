@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 
-const { registerSeller, loginSeller, updateSellerProfile,
+const { registerSeller, getSellerProfile, loginSeller, updateSellerProfile,
      resetSellerPassword, addProduct,deleteSellerAccount,
-     updateProductStockAndPrice,deleteProductBySeller , 
+     updateProductStockAndPrice,deleteProductBySeller , getMyProducts,
      logoutseller } = require('../controllers/sellerController');
 const authSeller = require('../middlewares/authSeller');
 const upload = require('../middlewares/multer'); // This should give you `upload.single`
@@ -12,12 +12,16 @@ const upload = require('../middlewares/multer'); // This should give you `upload
 router.post('/register', registerSeller);
 router.post('/login', loginSeller);
 router.put('/update-profile', authSeller, updateSellerProfile);
+router.get('/profile', authSeller, getSellerProfile); 
 router.post('/reset-password', authSeller, resetSellerPassword);
 router.delete('/delete-account', authSeller, deleteSellerAccount);
 router.post('/logout', authSeller, logoutseller);
 
 // ✅ Add Products by seller
 router.post('/addProducts', authSeller, upload.single('image'), addProduct);
+//to fetch added products
+router.get('/my', authSeller,getMyProducts);
+
 //update price or quantity
 router.put('/update/:productId', authSeller, updateProductStockAndPrice);
 //delete product

@@ -8,11 +8,18 @@ const cookieParser = require('cookie-parser');
 const cors = require('cors');  // <-- Make sure this is installed
 
 // ✅ CORS configuration: allow frontend origin and credentials
-app.use(cors({
-  origin: 'http://localhost:3000',  // <-- Your React frontend (or adjust as needed)
-  credentials: true                 // <-- Required to allow cookies from frontend
-}));
+const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174'];
 
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
