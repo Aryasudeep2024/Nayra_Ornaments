@@ -56,58 +56,50 @@ const register = async (req, res) => {
   }
 };
 
-// Login Admin
+// Login SuperAdmin
 
 const login = async (req, res) => {
-  
-
   try {
     const { email, password } = req.body;
 
-    
-
     if (!email || !password) {
-      
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const admin = await User.findOne({ email, role: { $in: ["admin", "superadmin"] } });
+    const admin = await User.findOne({ email, role: "superadmin" });
 
     if (!admin) {
-    
-      return res.status(400).json({ error: "Admin not found" });
+      return res.status(400).json({ error: "Superadmin not found" });
     }
-
-    
 
     const isMatch = await bcrypt.compare(password.trim(), admin.password.trim());
 
-    
-
     if (!isMatch) {
-      
-      return res.status(400).json({ error: "Invalid password" });
+      return res.status(400).json({ error: "Invalid credentials" });
     }
 
     const token = createToken(admin._id, admin.role);
-    
+
+    const isProduction = process.env.NODE_ENV === "production";
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-    console.log("🍪 Token cookie sent");
 
     const adminData = admin.toObject();
     delete adminData.password;
 
-    console.log("🎉 Login successful");
-    res.status(200).json({ message: "Login successful", admin: adminData });
+    res.status(200).json({
+      message: "Login successful",
+      user: adminData,
+    });
 
   } catch (error) {
     console.error("🔥 Login error:", error.message);
-    res.status(500).json({ error: error.message || "Internal server error" });
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
