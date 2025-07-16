@@ -1,35 +1,41 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
-  userId: {
+  user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
   },
+  
   products: [
     {
-      productId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Product',
-        required: true
-      },
-      quantity: {
-        type: Number,
-        required: true,
-        default: 1
-      }
+      productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+      name: String,
+      image: String,
+      price: Number,
+      quantity: Number,
+      addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     }
   ],
-  totalPrice: {
+  totalAmount: {
     type: Number,
-    required: true
+    required: true,
   },
-  status: {
+  paymentStatus: {
     type: String,
-    enum: ['pending', 'processing', 'shipped', 'delivered'],
-    default: 'pending'
-  }
-}, { timestamps: true });
+    enum: ['pending', 'paid', 'failed'],
+    default: 'pending',
+  },
+  paymentId: String, // Stripe session or payment intent ID
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  orderStatus: {
+  type: String,
+  enum: ['Pending', 'Confirmed', 'cancelled'],
+  default: 'Pending'
+}
+});
 
-const Order = mongoose.model('Order', orderSchema);
-export default Order;
+module.exports = mongoose.model('Order', orderSchema);

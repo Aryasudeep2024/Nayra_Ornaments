@@ -9,8 +9,9 @@ const authAdmin = (req, res, next) => {
     }
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
+   // console.log("hi am here",decodedToken)
 
-    if (!decodedToken || !decodedToken.id || !decodedToken.role) {
+    if (!decodedToken || !decodedToken.userId || !decodedToken.role) {
       return res.status(403).json({ message: "Unauthorized: Invalid token payload" });
     }
 

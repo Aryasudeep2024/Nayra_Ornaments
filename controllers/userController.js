@@ -39,64 +39,50 @@ const register = async (req, res, next) => {
     res.status(error.status || 500).json({ error: error.message || "Internal server error" });
   }
 };
-
-//login
-
-const login = async (req, res, next) => {
+const login = async (req, res) => {
   try {
-    let { email, password } = req.body || {};
+    const { email, password } = req.body || {};
 
-    // Trim inputs
     const trimmedEmail = email?.trim();
     const trimmedPassword = password?.trim();
-    console.log("🔐 Password being sent:", JSON.stringify(trimmedPassword));
 
-    console.log("📩 Email being sent:", `"${trimmedEmail}"`);
-    console.log("🔐 Password being sent:", `"${trimmedPassword}"`);
-
-    // Validate input
     if (!trimmedEmail || !trimmedPassword) {
       return res.status(400).json({ error: "All fields are mandatory" });
     }
 
-    // Check if user exists
     const user = await User.findOne({ email: trimmedEmail });
     if (!user) {
-      console.log("❌ User not found for:", trimmedEmail);
       return res.status(400).json({ error: "User not found" });
     }
 
-    console.log("🔍 Found user:", user.email, "Role:", user.role);
-
-    // Compare passwords
     const isPasswordMatch = await bcrypt.compare(trimmedPassword, user.password);
-    
     if (!isPasswordMatch) {
-      console.log("❌ Password mismatch for:", trimmedEmail);
       return res.status(400).json({ error: "Invalid password" });
     }
 
-    // Create token
     const token = createToken(user._id, user.role);
 
-    // Set token in cookie
+    // 🌍 Set cookie options based on environment
+    const isProduction = process.env.NODE_ENV === 'PRODUCTION';
+
     res.cookie('token', token, {
       httpOnly: true,
-      secure: false, // Use `true` in production (HTTPS)
-      sameSite: "strict"
+      secure: isProduction, // only HTTPS in production
+      sameSite: isProduction ? 'None' : 'Strict', // required for cross-site cookie in production
+      maxAge: 60 * 60 * 1000, // ⏱️ 1 hour in ms
     });
 
-    // Exclude password from response
     const userObject = user.toObject();
     delete userObject.password;
 
-    console.log("✅ Login Success:", userObject);
-
-    return res.status(200).json({ message: "Login Successful", user: userObject });
+    return res.status(200).json({
+      message: "Login Successful",
+      user: userObject,
+    });
 
   } catch (error) {
     console.error("🔥 Login Error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 

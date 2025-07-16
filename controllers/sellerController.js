@@ -38,9 +38,10 @@ const registerSeller = async (req, res) => {
 
 const getSellerProfile = async (req, res) => {
   try {
-    const sellerId = req.user.id; // comes from authSeller middleware
+    const sellerId = req.user.userId;
+    console.log("here iam ,",sellerId) // comes from authSeller middleware
     const seller = await User.findById(sellerId).select('-password');
-
+    
     if (!seller || seller.role !== 'seller') {
       return res.status(403).json({ message: 'Access denied. Not a seller.' });
     }
@@ -55,10 +56,13 @@ const getSellerProfile = async (req, res) => {
 
 const loginSeller = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
 
-    // Check if seller exists
-    const seller = await User.findOne({ email });
+    if (!email || !password) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    const seller = await User.findOne({ email: email.trim() });
 
     if (!seller) {
       return res.status(400).json({ message: 'Invalid email or password' });
@@ -68,68 +72,55 @@ const loginSeller = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Not a seller account.' });
     }
 
-    // Compare password
-    console.log("🔑 Password in DB:", seller.password);
-    const isMatch = await bcrypt.compare(password.trim(), seller.password.trim());
-    console.log("🔄 Password match result:", isMatch);
+    const isMatch = await bcrypt.compare(password.trim(), seller.password);
 
     if (!isMatch) {
-      console.log("❌ Passwords do not match.");
       return res.status(400).json({ message: 'Invalid email or password' });
     }
 
-    // Generate JWT
     const token = jwt.sign(
       { id: seller._id, role: seller.role },
       process.env.JWT_SECRET_KEY,
       { expiresIn: '7d' }
     );
 
-    // Set token in cookie
+    // ✅ Set cookie with production-aware settings
+    const isProduction = process.env.NODE_ENV === 'PRODUCTION';
+
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      secure: isProduction,
+      sameSite: isProduction ? 'None' : 'Strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    // ⏳ Check approval status
-    if (!seller.isApproved) {
-      return res.status(200).json({
-        message: 'Login successful, but seller not approved yet',
-        pendingApproval: true,
-        seller: {
-          id: seller._id,
-          name: seller.name,
-          email: seller.email,
-          shopName: seller.shopName,
-          contactNumber: seller.contactNumber,
-          profilePic: seller.profilePic,
-          role: seller.role,
-          isApproved: false
-        }
-      });
-    }
+    const sellerInfo = {
+      id: seller._id,
+      name: seller.name,
+      email: seller.email,
+      shopName: seller.shopName,
+      contactNumber: seller.contactNumber,
+      profilePic: seller.profilePic,
+      role: seller.role,
+      isApproved: seller.isApproved
+    };
 
-    // ✅ Send successful login response
-    res.status(200).json({
-      message: 'Login successful',
-      seller: {
-        id: seller._id,
-        name: seller.name,
-        email: seller.email,
-        shopName: seller.shopName,
-        contactNumber: seller.contactNumber,
-        profilePic: seller.profilePic,
-        role: seller.role,
-        isApproved: true
-      },
+    const statusMessage = seller.isApproved
+      ? 'Login successful'
+      : 'Login successful, but seller not approved yet';
+
+    return res.status(200).json({
+      message: statusMessage,
+      pendingApproval: !seller.isApproved,
+      seller: sellerInfo
     });
 
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Server error' });
+    console.error('❌ Seller Login Error:', error);
+    return res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 
 
@@ -184,12 +175,12 @@ const deleteSellerAccount = async (req, res) => {
 // ✅ Seller updates their own profile
 const updateSellerProfile = async (req, res) => {
   try {
-    const sellerId = req.user.id;
+    const sellerId = req.user.userId;
 
     const seller = await User.findById(sellerId);
 
     if (!seller || seller.role !== 'seller') {
-      return res.status(403).json({ message: 'Access denied. Not a seller.' });
+      return res.status(403).json({ message: 'Access denied. Not a seller..' });
     }
 
     const { name, shopName,email, contactNumber, profilePic } = req.body;
@@ -263,7 +254,7 @@ const addProduct = async (req, res, next) => {
 
     const result = await cloudinary.uploader.upload(req.file.path);
 
-    const addedBy = req.user.id || req.user._id;
+    const addedBy = req.user.id || req.user.userId;
     const role = req.user.role;
 
     const product = new Product({
@@ -292,30 +283,22 @@ const addProduct = async (req, res, next) => {
 
 const getMyProducts = async (req, res) => {
   try {
-    console.log('🔍 Incoming request to GET /seller/my');
-
-    // Log all cookies
-    console.log('🍪 Cookies Received:', req.cookies);
-
-    // Log the entire req.user object (decoded JWT)
-    console.log('👤 Decoded user object from JWT:', req.user);
+   
 
     // Extract seller ID from JWT payload
-    const sellerId = req.user?._id || req.user?.id;
-    console.log('🆔 Fetched Seller ID:', sellerId);
+    const sellerId = req.user?.userId || req.user?.userId;
+    
 
     // If sellerId is missing, log a warning
     if (!sellerId) {
-      console.warn('⚠️ Seller ID is missing from JWT. Unauthorized request.');
+     
       return res.status(401).json({ message: 'Invalid seller credentials.' });
     }
 
-    // Fetch products from DB
-    console.log('📦 Attempting to fetch products from DB for seller:', sellerId);
+    
     const products = await Product.find({ addedBy: sellerId }).sort({ createdAt: -1 });
 
-    // Log the count of products found
-    console.log(`✅ ${products.length} product(s) found for this seller.`);
+  
 
     // Optional: Log one example product (if any)
     if (products.length > 0) {
@@ -353,7 +336,7 @@ const updateProductStockAndPrice = async (req, res) => {
   
 
     // Only allow seller (of that product) or superadmin to update
-    if (isSeller && product.addedBy.toString() !== req.user.id) {
+    if (isSeller && product.addedBy.toString() !== req.user.userId) {
       return res.status(403).json({ message: 'Not authorized to update this product' });
     }
 
@@ -380,7 +363,7 @@ const updateProductStockAndPrice = async (req, res) => {
 const deleteProductBySeller = async (req, res) => {
   try {
     const { productId } = req.params;
-    const userId = req.user.id || req.user._id;
+    const userId = req.user.id || req.user.userId;
     const userRole = req.user.role;
 
     const product = await Product.findById(productId);
@@ -406,7 +389,33 @@ const deleteProductBySeller = async (req, res) => {
     res.status(500).json({ message: 'Server error while deleting product' });
   }
 };
+// Search products by category (for users & sellers)
+const searchProductsByCategory = async (req, res) => {
 
+  
+  try {
+    const { category } = req.query;
+
+    if (!category) {
+      return res.status(400).json({ message: 'Category is required' });
+    }
+
+    // Case-insensitive search by category
+    const products = await Product.find({
+      category: { $regex: category, $options: 'i' }
+    });
+
+    if (!products.length) {
+      return res.status(404).json({ message: 'No products found for this category' });
+    }
+
+    res.status(200).json({ products });
+
+  } catch (error) {
+    console.error('🔴 Error during category search:', error);
+    res.status(500).json({ message: 'Server error during category search' });
+  }
+};
 
 // Log out seller
 const logoutseller = async (req, res, next) => {
@@ -420,4 +429,4 @@ const logoutseller = async (req, res, next) => {
 
 
 
-module.exports = { registerSeller,loginSeller,getSellerProfile,getMyProducts ,updateSellerProfile,addProduct,logoutseller,resetSellerPassword,deleteSellerAccount,deleteProductBySeller,updateProductStockAndPrice   };
+module.exports = { registerSeller,loginSeller,getSellerProfile,getMyProducts ,updateSellerProfile,addProduct,searchProductsByCategory,logoutseller,resetSellerPassword,deleteSellerAccount,deleteProductBySeller,updateProductStockAndPrice   };

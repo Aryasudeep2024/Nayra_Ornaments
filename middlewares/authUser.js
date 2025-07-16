@@ -3,23 +3,19 @@ const jwt = require('jsonwebtoken');
 const authUser = (req, res, next) => {
   try {
     const { token } = req.cookies;
-
     if (!token) {
       return res.status(401).json({ message: 'User not authorized' });
     }
 
-    // Verify and decode token
     const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
 
-    if (!decoded) {
-      return res.status(401).json({ message: 'Invalid token' });
+    if (!decoded?.userId) {
+      return res.status(401).json({ message: 'Invalid token data' });
     }
 
-    // ✅ This is important!
     req.user = {
-      _id: decoded.id,        // Not decoded._id
-      role: decoded.role,     // Add role if you use it in delete logic
-      name: decoded.name      // Optional: if you store name in token
+      _id: decoded.userId,   // ✅ Consistent with MongoDB _id usage
+      role: decoded.role
     };
 
     next();

@@ -7,6 +7,9 @@ const sellerRoutes = require('./sellerRoutes')
 const cartRoutes= require('./cartRoutes')
 const reviewRoutes=require('./reviewRoutes')
 const productRoutes=require('./productRoutes')
+const paymentRoutes = require('./paymentRoutes');
+const orderRoutes = require('./orderRoutes');
+
 
 //api/user
 router.use('/admin', adminRoutes)
@@ -20,6 +23,10 @@ router.use('/collection',productRoutes)
 router.use('/cart',cartRoutes)
 
 router.use('/review',reviewRoutes)
+
+router.use('/payment',paymentRoutes)
+
+router.use('/orders',orderRoutes)
 
 
 

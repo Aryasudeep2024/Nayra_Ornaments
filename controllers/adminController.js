@@ -118,6 +118,7 @@ const login = async (req, res) => {
 const getUserProfileById = async (req, res) => {
   try {
     const userId = req.params.id;
+    
 
     // Optionally, check if the requester is a Super Admin
     if (req.user.role !== "superadmin") {
@@ -261,7 +262,7 @@ console.log("File received:", req.file);
 
     const result = await cloudinary.uploader.upload(req.file.path);
 
-    const addedBy = req.user.id || req.user._id;
+    const addedBy = req.user.id || req.user.userId;
     const role = req.user.role;
 
     const product = new Product({
