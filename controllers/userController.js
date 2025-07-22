@@ -7,6 +7,7 @@ const Cart = require("../models/cartModel");
 
 
 // Register Controller
+
 const register = async (req, res, next) => {
   try {
     const { name, email, password, profilePic } = req.body || {};
@@ -15,12 +16,17 @@ const register = async (req, res, next) => {
       return res.status(400).json({ error: "All fields are mandatory" });
     }
 
+    if (password.length < 8 || password.length > 128) {
+      return res.status(400).json({
+        error: "Password must be between 8 and 128 characters long",
+      });
+    }
+
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ error: "User already exists" });
     }
 
-    // Pass plain password; schema will hash it
     const newUser = new User({
       name,
       email,
@@ -36,9 +42,19 @@ const register = async (req, res, next) => {
     res.status(201).json({ message: "Account created", userData });
   } catch (error) {
     console.error(error);
-    res.status(error.status || 500).json({ error: error.message || "Internal server error" });
+
+    // Handle Mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ error: messages.join(', ') });
+    }
+
+    res
+      .status(error.status || 500)
+      .json({ error: error.message || "Internal server error" });
   }
 };
+//log in user
 const login = async (req, res) => {
   try {
     const { email, password } = req.body || {};
